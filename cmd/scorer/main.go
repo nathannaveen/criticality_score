@@ -38,6 +38,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/urfave/cli/v2"
 	"io"
 	"os"
 	"path"
@@ -51,7 +52,15 @@ import (
 	"github.com/ossf/criticality_score/internal/scorer"
 )
 
-const defaultLogLevel = zapcore.InfoLevel
+const (
+	inFileFlag      = "in-file"
+	outFileFlag     = "out-file"
+	config          = "config"
+	columnFlag      = "column"
+	logFlag         = "log"
+	logEnvFlag      = "log-env"
+	defaultLogLevel = zapcore.InfoLevel
+)
 
 var (
 	configFlag     = flag.String("config", "", "the filename of the config (required)")
@@ -59,6 +68,69 @@ var (
 	logLevel       = defaultLogLevel
 	logEnv         log.Env
 )
+
+func setUpCli() *cli.App {
+	return &cli.App{
+		Usage: "Scores collected signal for record in the IN_CSV.",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    config,
+				Aliases: []string{"c"},
+				Usage:   "the filename of the config, if none is provided, the default config is used",
+			},
+			&cli.StringFlag{
+				Name:     columnFlag,
+				Aliases:  []string{"n"},
+				Usage:    "the name of the output column",
+				Required: true,
+			},
+			&cli.IntFlag{
+				Name:    logFlag,
+				Aliases: []string{"l"},
+				Usage:   "set the `level` of logging.",
+				Value:   int(defaultLogLevel),
+			},
+			&cli.IntFlag{
+				Name:    logEnvFlag,
+				Aliases: []string{"e"},
+				Usage:   "set logging `env`.",
+				Value:   int(log.DefaultEnv),
+			},
+			&cli.StringFlag{
+				Name:     outFileFlag,
+				Aliases:  []string{"o"},
+				Usage:    "the output file to write to",
+				Required: true,
+			},
+			&cli.StringFlag{
+				Name:     inFileFlag,
+				Aliases:  []string{"i"},
+				Usage:    "the input file to read from",
+				Required: true,
+			},
+		},
+		Before: func(c *cli.Context) error {
+			// validate the in file
+			if c.String(inFileFlag) == "" {
+				return errors.New("in-file is required")
+			}
+			// validate the out file
+			if c.String(outFileFlag) == "" {
+				return errors.New("out-file is required")
+			}
+			// validate the column flag
+			if c.String(columnFlag) == "" {
+				return errors.New("column is required")
+			}
+
+			if _, err := os.Stat(c.String(inFileFlag)); !os.IsExist(err) {
+				return fmt.Errorf("in-file %s does not exist", c.String(inFileFlag))
+			}
+
+			return nil
+		},
+	}
+}
 
 func init() {
 	flag.Var(&logLevel, "log", "set the `level` of logging.")
@@ -103,76 +175,96 @@ func makeRecord(header, row []string) map[string]string {
 }
 
 func main() {
-	flag.Parse()
+	app := setUpCli()
 
-	logger, err := log.NewLogger(logEnv, logLevel)
-	if err != nil {
-		panic(err)
-	}
-	defer logger.Sync()
+	app.Action = func(c *cli.Context) error {
+		logger, err := log.NewLogger(logEnv, logLevel)
+		if err != nil {
+			panic(err)
+		}
+		defer logger.Sync()
 
-	if flag.NArg() != 1 {
-		logger.Error("Must have an input file specified.")
-		os.Exit(2)
-	}
-	inFilename := flag.Args()[0]
+		inFilename := c.String(inFileFlag)
 
-	// Open the in-file for reading
-	var r *csv.Reader
-	fr, err := infile.Open(context.Background(), inFilename)
-	if err != nil {
-		logger.With(
-			zap.Error(err),
-			zap.String("filename", inFilename),
-		).Error("Failed to open input file")
-		os.Exit(2)
-	}
-	defer fr.Close()
-	r = csv.NewReader(fr)
+		if inFilename == "" {
+			// This is for the condition that the user does not provide the in-file flag and instead uses the positional argument
+			inFilename = c.Args().Get(0)
+		}
 
-	// Open the out-file for writing
-	fw, err := outfile.Open(context.Background())
-	if err != nil {
-		logger.With(
-			zap.Error(err),
-		).Error("Failed to open file for output")
-		os.Exit(2)
-	}
-	defer fw.Close()
-	w := csv.NewWriter(fw)
-	defer w.Flush()
-
-	var s *scorer.Scorer
-	if *configFlag == "" {
-		s = scorer.FromDefaultConfig()
-	} else {
-		// Prepare the scorer from the config file
-		cf, err := os.Open(*configFlag)
+		// Open the in-file for reading
+		var r *csv.Reader
+		fr, err := infile.Open(context.Background(), inFilename)
 		if err != nil {
 			logger.With(
 				zap.Error(err),
-				zap.String("filename", *configFlag),
-			).Error("Failed to open config file")
-			os.Exit(2)
+				zap.String("filename", inFilename),
+			).Error("Failed to open input file")
+			return err
 		}
-		defer cf.Close()
+		defer fr.Close()
+		r = csv.NewReader(fr)
 
-		s, err = scorer.FromConfig(scorer.NameFromFilepath(*configFlag), cf)
+		// Open the out-file for writing
+		fw, err := outfile.Open(context.Background())
 		if err != nil {
 			logger.With(
 				zap.Error(err),
-				zap.String("filename", *configFlag),
-			).Error("Failed to initialize scorer")
-			os.Exit(2)
+			).Error("Failed to open file for output")
+			return err
 		}
-	}
+		defer fw.Close()
+		w := csv.NewWriter(fw)
+		defer w.Flush()
 
+		var s *scorer.Scorer
+		if *configFlag == "" {
+			s = scorer.FromDefaultConfig()
+		} else {
+			// Prepare the scorer from the config file
+			cf, err := os.Open(*configFlag)
+			if err != nil {
+				logger.With(
+					zap.Error(err),
+					zap.String("filename", *configFlag),
+				).Error("Failed to open config file")
+				return err
+			}
+			defer cf.Close()
+
+			s, err = scorer.FromConfig(scorer.NameFromFilepath(*configFlag), cf)
+			if err != nil {
+				logger.With(
+					zap.Error(err),
+					zap.String("filename", *configFlag),
+				).Error("Failed to initialize scorer")
+				return err
+			}
+		}
+
+		inHeader, err := header(err, r, logger, s, w)
+
+		if err != nil {
+			return err
+		}
+
+		err = pqStuff(r, logger, inHeader, s, w)
+
+		if err != nil {
+			return err
+		}
+
+		// -allow-score-override -- if the output field exists overwrite the existing data
+		return nil
+	}
+}
+
+func header(err error, r *csv.Reader, logger *zap.Logger, s *scorer.Scorer, w *csv.Writer) ([]string, error) {
 	inHeader, err := r.Read()
 	if err != nil {
 		logger.With(
 			zap.Error(err),
 		).Error("Failed to read CSV header row")
-		os.Exit(2)
+		return nil, err
 	}
 
 	// Generate and output the CSV header row
@@ -181,15 +273,18 @@ func main() {
 		logger.With(
 			zap.Error(err),
 		).Error("Failed to generate output header row")
-		os.Exit(2)
+		return nil, err
 	}
 	if err := w.Write(outHeader); err != nil {
 		logger.With(
 			zap.Error(err),
 		).Error("Failed to write CSV header row")
-		os.Exit(2)
+		return nil, err
 	}
+	return inHeader, nil
+}
 
+func pqStuff(r *csv.Reader, logger *zap.Logger, inHeader []string, s *scorer.Scorer, w *csv.Writer) error {
 	var pq PriorityQueue
 	for {
 		row, err := r.Read()
@@ -200,7 +295,7 @@ func main() {
 			logger.With(
 				zap.Error(err),
 			).Error("Failed to read CSV row")
-			os.Exit(2)
+			return err
 		}
 		record := makeRecord(inHeader, row)
 		score := s.ScoreRaw(record)
@@ -215,8 +310,9 @@ func main() {
 			logger.With(
 				zap.Error(err),
 			).Error("Failed to write CSV header row")
-			os.Exit(2)
+			return err
 		}
 	}
-	// -allow-score-override -- if the output field exists overwrite the existing data
+
+	return nil
 }

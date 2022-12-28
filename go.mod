@@ -52,6 +52,7 @@ require (
 	github.com/bombsimon/logrusr/v2 v2.0.1 // indirect
 	github.com/bradleyfalzon/ghinstallation/v2 v2.1.0 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.3.0 // indirect
+	github.com/cpuguy83/go-md2man/v2 v2.0.2 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
@@ -68,8 +69,11 @@ require (
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/prometheus/prometheus v2.5.0+incompatible // indirect
 	github.com/rogpeppe/go-internal v1.8.1 // indirect
+	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/shurcooL/graphql v0.0.0-20200928012149-18c5c3165e3a // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
+	github.com/urfave/cli/v2 v2.23.7 // indirect
+	github.com/xrash/smetrics v0.0.0-20201216005158-039620a65673 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
 	golang.org/x/crypto v0.1.0 // indirect
