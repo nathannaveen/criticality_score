@@ -2,7 +2,7 @@ name: Push Docker Image
 
 on:
   push:
-    branches: ['nathan/feat/publish-docker-image']
+    branches: ['nathan/feat/publish-docker-image'] 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
