@@ -68,7 +68,7 @@ type Opener struct {
 	Perm              os.FileMode
 }
 
-// CreateOpener creates an Opener and defines the sepecified flags fileFlag, forceFlag and appendFlag.
+// CreateOpener creates an Opener and defines the specified flags fileFlag, forceFlag and appendFlag.
 func CreateOpener(fs *flag.FlagSet, fileFlag, forceFlag, appendFlag, fileHelpName string) *Opener {
 	o := &Opener{
 		Perm:              0o666,

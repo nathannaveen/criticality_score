@@ -79,10 +79,10 @@ func setUpCli() *cli.App {
 				Usage:   "the filename of the config, if none is provided, the default config is used",
 			},
 			&cli.StringFlag{
-				Name:     columnFlag,
-				Aliases:  []string{"n"},
-				Usage:    "the name of the output column",
-				Required: true,
+				Name:    columnFlag,
+				Aliases: []string{"n"},
+				Usage:   "the name of the output column",
+				// Required: true,
 			},
 			&cli.IntFlag{
 				Name:    logFlag,
@@ -97,34 +97,38 @@ func setUpCli() *cli.App {
 				Value:   int(log.DefaultEnv),
 			},
 			&cli.StringFlag{
-				Name:     outFileFlag,
-				Aliases:  []string{"o"},
-				Usage:    "the output file to write to",
-				Required: true,
+				Name:    outFileFlag,
+				Aliases: []string{"o"},
+				Usage:   "the output file to write to",
 			},
 			&cli.StringFlag{
-				Name:     inFileFlag,
-				Aliases:  []string{"i"},
-				Usage:    "the input file to read from",
-				Required: true,
+				Name:    inFileFlag,
+				Aliases: []string{"i"},
+				Usage:   "the input file to read from",
+			},
+			&cli.BoolFlag{
+				Name:    "force",
+				Aliases: []string{"f"},
+				Usage:   "force overwrite of the output file",
+			},
+			&cli.BoolFlag{
+				Name:    "append",
+				Aliases: []string{"a"},
+				Usage:   "append to the output file",
 			},
 		},
 		Before: func(c *cli.Context) error {
-			// validate the in file
-			if c.String(inFileFlag) == "" {
-				return errors.New("in-file is required")
-			}
-			// validate the out file
-			if c.String(outFileFlag) == "" {
-				return errors.New("out-file is required")
-			}
-			// validate the column flag
-			if c.String(columnFlag) == "" {
-				return errors.New("column is required")
+			if c.NArg() == 0 {
+				return nil
 			}
 
-			if _, err := os.Stat(c.String(inFileFlag)); !os.IsExist(err) {
-				return fmt.Errorf("in-file %s does not exist", c.String(inFileFlag))
+			inFile := c.String(inFileFlag)
+			if inFile == "" {
+				inFile = c.Args().Get(0)
+			}
+
+			if _, err := os.Stat(inFile); os.IsNotExist(err) {
+				return fmt.Errorf("in-file %s does not exist", inFile)
 			}
 
 			return nil
@@ -177,13 +181,17 @@ func makeRecord(header, row []string) map[string]string {
 func main() {
 	app := setUpCli()
 
-	app.Action = func(c *cli.Context) error {
-		logger, err := log.NewLogger(logEnv, logLevel)
-		if err != nil {
-			panic(err)
-		}
-		defer logger.Sync()
+	logger, err := log.NewLogger(logEnv, logLevel)
+	if err != nil {
+		panic(err)
+	}
+	defer logger.Sync()
 
+	app.Action = func(c *cli.Context) error {
+		if c.NArg() == 0 {
+			cli.ShowAppHelp(c)
+			return nil
+		}
 		inFilename := c.String(inFileFlag)
 
 		if inFilename == "" {
@@ -255,6 +263,10 @@ func main() {
 
 		// -allow-score-override -- if the output field exists overwrite the existing data
 		return nil
+	}
+
+	if err := app.Run(os.Args); err != nil {
+		logger.Fatal("Failed to run app", zap.Error(err))
 	}
 }
 
