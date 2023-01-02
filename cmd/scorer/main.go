@@ -38,11 +38,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/urfave/cli/v2"
 	"io"
 	"os"
 	"path"
 
+	"github.com/urfave/cli/v2"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -241,7 +241,7 @@ func main() {
 			}
 		}
 
-		inHeader, err := header(err, r, logger, s, w)
+		inHeader, err := header(r, logger, s, w)
 
 		if err != nil {
 			return err
@@ -258,7 +258,7 @@ func main() {
 	}
 }
 
-func header(err error, r *csv.Reader, logger *zap.Logger, s *scorer.Scorer, w *csv.Writer) ([]string, error) {
+func header(r *csv.Reader, logger *zap.Logger, s *scorer.Scorer, w *csv.Writer) ([]string, error) {
 	inHeader, err := r.Read()
 	if err != nil {
 		logger.With(
